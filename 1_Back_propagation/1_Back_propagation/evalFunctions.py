@@ -11,10 +11,12 @@ def calcAccuracy(LPred, LTrue):
         acc (float): Prediction accuracy.
     """
 
+
     # --------------------------------------------
     # === Your code here =========================
     # --------------------------------------------
-    acc = None
+
+    acc = np.mean(LPred == LTrue)
     # ============================================
     return acc
 
@@ -34,9 +36,18 @@ def calcConfusionMatrix(LPred, LTrue):
     # --------------------------------------------
     # === Your code here =========================
     # --------------------------------------------
-    cM = None
+
+    labels = set(LPred)
+
+    cM = np.zeros((len(labels), len(labels)))
+
+    for i, pred_lab in enumerate(labels):
+        for j, actual_lab in enumerate(labels):
+            cM[i, j] = np.sum((LPred == pred_lab) & (LTrue == actual_lab))
+
     # ============================================
 
+    cM = cM.astype(int)
     return cM
 
 
