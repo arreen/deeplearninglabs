@@ -1,1 +1,3 @@
 *.npy
+DNN_hp_tuning/
+__pycache__/
