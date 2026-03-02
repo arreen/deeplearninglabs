@@ -9,6 +9,13 @@ from tf_keras.optimizers import SGD, Adam
 import tensorflow_probability as tfp
 
 from ray import train
+from ray import tune
+
+import math
+from tf_keras.callbacks import LearningRateScheduler
+
+import numpy as np
+from sklearn.utils import class_weight
 
 # Set seed from random number generator, for better comparisons
 from numpy.random import seed
@@ -21,7 +28,7 @@ import matplotlib.pyplot as plt
 # =======================================
 # DEEP LEARNING MODEL BUILD FUNCTION
 def build_DNN(input_shape, n_hidden_layers, n_hidden_units, loss, act_fun='sigmoid', optimizer:str='sgd', learning_rate=0.01, 
-            use_bn=False, use_dropout=False, use_custom_dropout=False, print_summary=False, use_variational_layer=False):
+            use_bn=False, use_dropout=False, use_custom_dropout=False, print_summary=False, use_variational_layer=False, global_clipnorm=10**10, kl_weight = 100):
     """
     Builds a Deep Neural Network (DNN) model based on the provided parameters.
     
@@ -44,8 +51,16 @@ def build_DNN(input_shape, n_hidden_layers, n_hidden_units, loss, act_fun='sigmo
     # --------------------------------------------
     # === Your code here =========================
     # --------------------------------------------      
-    # Setup optimizer, depending on input parameter string
-    optimizer = ???
+    # Setup optimizer, depending on input parameter string  
+
+
+    if optimizer == "sgd":
+        optimizer = keras.optimizers.SGD(learning_rate = learning_rate, global_clipnorm=global_clipnorm)
+    elif optimizer == "adam":
+        optimizer = keras.optimizers.Adam(learning_rate = learning_rate, global_clipnorm=global_clipnorm)
+    else:
+        raise ValueError("Suppported optimizers: sgd, adam")
+
 
     # ============================================
 
@@ -57,18 +72,50 @@ def build_DNN(input_shape, n_hidden_layers, n_hidden_units, loss, act_fun='sigmo
     # --------------------------------------------
     # Add layers to the model, using the input parameters of the build_DNN function
     
-    # Add first (Input) layer, requires input shape
-    ???
+
+    if use_variational_layer:
+        model.add(tfp.layers.DenseVariational(n_hidden_units, activation = act_fun, input_shape = input_shape, kl_weight=kl_weight,
+                                              make_prior_fn = prior, make_posterior_fn = posterior))
+    else:
+        model.add(Dense(n_hidden_units, activation = act_fun, input_shape = input_shape))
     
-    # Add remaining layers. These to not require the input shape since it will be infered during model compile
-    for _ in range(n_hidden_layers):
-        ???
+    if type(use_dropout) == float or type(use_dropout) == int:
+        model.add(Dropout(use_dropout))
+    if type(use_custom_dropout) == float or type(use_custom_dropout) == int:
+        model.add(myDropout(use_custom_dropout))
+    if use_bn: 
+        model.add(BatchNormalization())
+        
+
+        
+        # Add remaining layers. These to not require the input shape since it will be infered during model compile
+    for _ in range(n_hidden_layers - 1):
+        if use_variational_layer:
+            model.add(tfp.layers.DenseVariational(n_hidden_units, activation = act_fun, kl_weight=kl_weight,
+                                              make_prior_fn = prior, make_posterior_fn = posterior))
+        else:
+            model.add(Dense(n_hidden_units, activation = act_fun))
+        if type(use_dropout) == float or type(use_dropout) == int:
+            model.add(Dropout(use_dropout))
+        if type(use_custom_dropout) == float or type(use_custom_dropout) == int:
+            model.add(myDropout(use_custom_dropout))
+        if use_bn: 
+            model.add(BatchNormalization())
+
+
+
+    
          
     # Add final layer
-    ???
+    if use_variational_layer:
+        model.add(tfp.layers.DenseVariational(1, activation = "sigmoid", kl_weight=kl_weight,
+                                              make_prior_fn = prior, make_posterior_fn = posterior))
+    else:
+        model.add(Dense(1, activation = "sigmoid"))
+
     
     # Compile model
-    model.compile(???)
+    model.compile(loss=loss, optimizer=optimizer, metrics=["accuracy"])
 
     # ============================================
     # Print model summary if requested
@@ -102,22 +149,61 @@ def train_DNN(config, training_config):
     
         def on_epoch_end(self, batch, logs={}):
             self.iteration += 1
-            train.report(dict(keras_info=logs, mean_accuracy=logs.get("accuracy"), mean_loss=logs.get("loss")))
+            tune.report(dict(keras_info=logs, mean_accuracy=logs.get("accuracy"), mean_loss=logs.get("loss")))
     
     # --------------------------------------------  
     # === Your code here =========================
     # --------------------------------------------
     # Unpack the data tuple
-    X_train, y_train, X_val, y_val = ???
+    X_train, y_train, X_val, y_val = training_config["data"]
 
     # Build the model using the variables stored into the config dictionary.
     # Hint: you provide the config dictionary to the build_DNN function as a keyword argument using the ** operator.
-    model = ???
+
+
+
+    batch_size = training_config["batch_size"]
+    epochs = training_config["epochs"]
+    learning_rate = config["learning_rate"]
+    loss = tf.keras.losses.BinaryFocalCrossentropy(gamma = config["gamma"], label_smoothing=0.02)
+    model = build_DNN(config["input_shape"], config["n_hidden_layers"], config["n_hidden_units"], loss, act_fun=config["act_fun"], optimizer=config["optimizer"], learning_rate=config["learning_rate"], print_summary=False, 
+                       use_bn=config["use_bn"], use_dropout=config["use_dropout"], use_custom_dropout=config["use_custom_dropout"])
+
+    #model=build_DNN(hyperparameter_space**) this doesnt work well with gamma and max_lr.
         
     # Train the model (no need to save the history, as the callback will log the results).
     # Remember to add the TuneReporterCallback() to the list of callbacks.
-    model.fit(???) 
 
+    max_lr = config["max_lr"]
+    warmup_duration = round(epochs*0.2)
+    # cosine annealing, one cycle
+    #https://wiki.cloudfactory.com/docs/mp-wiki/scheduler/cosineannealinglr
+    def scheduler(epoch, lr):
+        if epoch < warmup_duration:
+            return learning_rate + epoch * (max_lr-learning_rate) / warmup_duration
+        else:
+            decay_duration = epochs - warmup_duration
+            epochs_past_warmup = epoch - warmup_duration
+            min_lr = learning_rate * 0.1 
+
+            progress = epochs_past_warmup / decay_duration
+            cosine_multiplier = 0.5 * (1 + math.cos(math.pi * progress))
+            
+            return min_lr + (max_lr - min_lr) * cosine_multiplier    
+        
+    callback = LearningRateScheduler(scheduler)
+
+
+    value1, value2 = class_weight.compute_class_weight(class_weight="balanced", classes=np.unique(y_train), y= y_train)
+
+    class_weights = {0: value1,
+                1: value2}
+
+    model.fit(X_train, y_train, validation_data = (X_val, y_val), epochs = epochs, batch_size = batch_size, class_weight = class_weights, 
+                                callbacks=[callback, TuneReporterCallback()])
+
+
+    
     # --------------------------------------------
 
 
@@ -136,10 +222,14 @@ def prior(kernel_size, bias_size, dtype=None):
     prior_model = keras.Sequential(
         [
             tfp.layers.DistributionLambda(
-                lambda t: tfp.distributions.MultivariateNormalDiag(
-                    loc=tf.zeros(n), scale_diag=tf.ones(n)
+                lambda t: tfp.distributions.Mixture(
+                    cat = tfp.distributions.Categorical(probs=[0.16, 1 - 0.16]),
+                    components = [
+                        tfp.distributions.MultivariateNormalDiag(loc=tf.zeros(n), scale_diag=tf.ones(n)),
+                        tfp.distributions.MultivariateNormalDiag(loc=tf.zeros(n), scale_diag=tf.ones(n))
+                    ]
                 )
-            )
+                )
         ]
     )
     return prior_model
@@ -164,7 +254,7 @@ def posterior(kernel_size, bias_size, dtype=None):
 # =======================================
 
 # TRAINING CURVES PLOT FUNCTION
-def plot_results(history):
+def plot_results(history, lrbool = False):
     """
     Plots the training and validation loss and accuracy from a Keras history object.
     Parameters:
@@ -178,6 +268,13 @@ def plot_results(history):
     acc = history.history['accuracy']
     loss = history.history['loss']
     val_acc = history.history['val_accuracy']
+    if lrbool:
+        lr = history.history['lr']
+
+        plt.figure(figsize=(10,4))
+        plt.xlabel('Epochs')
+        plt.ylabel('Learning Rate')
+        plt.plot(lr)
     
     plt.figure(figsize=(10,4))
     plt.xlabel('Epochs')
