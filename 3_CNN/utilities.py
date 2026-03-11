@@ -31,7 +31,9 @@ def build_CNN(input_shape, loss,
                 learning_rate:float=0.01, 
                 act_fun='sigmoid', 
                 optimizer:str='sgd',
-                print_summary:bool=False):
+                print_summary:bool=False,
+                BN_order_experiment=False,
+                kernel_size = (3,3)):
     """
     Builds a Convolutional Neural Network (CNN) model based on the provided parameters.
     
@@ -57,7 +59,7 @@ def build_CNN(input_shape, loss,
     # --------------------------------------------  
 
     # Setup optimizer, depending on input parameter string
-    ???
+    optimizer = keras.optimizers.Adam(learning_rate = learning_rate)
     
     # ============================================
     
@@ -69,21 +71,40 @@ def build_CNN(input_shape, loss,
     # --------------------------------------------  
     
     # Add convolutional layers
-    for i in range(???):
-        ???
+    j = 0
+    for i in range(n_conv_layers):
+        model.add(Conv2D(filters = n_filters * 2**j,
+                         kernel_size=kernel_size, # experiment, change back to (3, 3)
+                         padding="same",
+                         activation=act_fun,
+                         input_shape=input_shape
+
+        ))
+
+        if BN_order_experiment:
+            model.add(MaxPooling2D(pool_size=(2, 2)))
+            model.add(BatchNormalization())
+        else:
+            model.add(BatchNormalization())
+            model.add(MaxPooling2D(pool_size=(2, 2)))
+        j += 1
     
     # Flatten the output of the convolutional layers
-    ???
+    model.add(Flatten())
     
     # Add dense layers
-    for i in range(???):
-        ???
+    for i in range(n_dense_layers):
+        model.add(Dense(n_nodes, activation="relu"))
+        model.add(BatchNormalization())
+
+        if type(use_dropout) == float or type(use_dropout) == int:
+            model.add(Dropout(use_dropout))
     
     # Add output layer
-    ???
+    model.add(Dense(10, activation="softmax"))
     
     # Compile the model
-    ???
+    model.compile(loss=loss, optimizer=optimizer, metrics=["accuracy"])
 
     # ============================================
 
