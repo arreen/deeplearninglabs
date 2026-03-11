@@ -4,7 +4,7 @@ import tf_keras as keras
 
 from tf_keras.models import Sequential, Model
 from tf_keras.layers import Input, Dense, BatchNormalization, Dropout, Conv2D, MaxPooling2D, Flatten
-from tf_keras.optimizers import SGD, Adam
+from tf_keras.optimizers import SGD, Adam, AdamW
 
 # Set seed from random number generator, for better comparisons
 import numpy as np
@@ -119,7 +119,7 @@ def build_CNN(input_shape, loss,
 # =======================================
 
 # TRAINING CURVES PLOT FUNCTION
-def plot_results(history):
+def plot_results(history, lrbool = False):
     """
     Plots the training and validation loss and accuracy from a Keras history object.
     Parameters:
@@ -133,6 +133,14 @@ def plot_results(history):
     acc = history.history['accuracy']
     loss = history.history['loss']
     val_acc = history.history['val_accuracy']
+    if lrbool:
+        lr = history.history['lr']
+
+        plt.figure(figsize=(10,4))
+        plt.xlabel('Epochs')
+        plt.ylabel('Learning Rate')
+        plt.plot(lr)
+    
     
     plt.figure(figsize=(10,4))
     plt.xlabel('Epochs')
