@@ -35,7 +35,9 @@ def build_CNN(input_shape, loss,
                 print_summary:bool=False,
                 BN_order_experiment:bool=False,
                 regularizer = None,
-                kernel_size = (3,3)):
+                regularizer_dense_layers = None,
+                kernel_size = (3,3),
+                kernel_init_scale = 1):
     """
     Builds a Convolutional Neural Network (CNN) model based on the provided parameters.
     
@@ -79,6 +81,10 @@ def build_CNN(input_shape, loss,
     # Add convolutional layers
     j = 0
     for i in range(n_conv_layers):
+
+        # different seed for each layer, fan_avg is glorot, but shrinking the scale as CNN breaks independency asumptions.
+        initializer = keras.initializers.VarianceScaling(scale=kernel_init_scale, mode="fan_avg", distribution="truncated_normal", seed=123*i)
+        
         model.add(Conv2D(filters = n_filters * 2**j,
                          kernel_size=kernel_size, # experiment, change back to (3, 3)
                          padding="same",
@@ -88,6 +94,7 @@ def build_CNN(input_shape, loss,
 
         ))
 
+        
         if BN_order_experiment:
             model.add(MaxPooling2D(pool_size=(2, 2)))
             model.add(BatchNormalization())
@@ -101,7 +108,7 @@ def build_CNN(input_shape, loss,
     
     # Add dense layers
     for i in range(n_dense_layers):
-        model.add(Dense(n_nodes, activation="relu"))
+        model.add(Dense(n_nodes, activation="relu", kernel_regularizer = regularizer_dense_layers))
         model.add(BatchNormalization())
 
         if type(use_dropout) == float or type(use_dropout) == int:
