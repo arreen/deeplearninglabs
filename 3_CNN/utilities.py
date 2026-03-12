@@ -5,6 +5,7 @@ import tf_keras as keras
 from tf_keras.models import Sequential, Model
 from tf_keras.layers import Input, Dense, BatchNormalization, Dropout, Conv2D, MaxPooling2D, Flatten
 from tf_keras.optimizers import SGD, Adam, AdamW
+from tf_keras import regularizers
 
 # Set seed from random number generator, for better comparisons
 import numpy as np
@@ -32,7 +33,8 @@ def build_CNN(input_shape, loss,
                 act_fun='sigmoid', 
                 optimizer:str='sgd',
                 print_summary:bool=False,
-                BN_order_experiment=False,
+                BN_order_experiment:bool=False,
+                regularizer = None,
                 kernel_size = (3,3)):
     """
     Builds a Convolutional Neural Network (CNN) model based on the provided parameters.
@@ -59,8 +61,12 @@ def build_CNN(input_shape, loss,
     # --------------------------------------------  
 
     # Setup optimizer, depending on input parameter string
-    optimizer = keras.optimizers.Adam(learning_rate = learning_rate)
-    
+    if optimizer.lower() == 'adam':
+        optimizer = keras.optimizers.Adam(learning_rate = learning_rate)
+    elif optimizer.lower() == 'sgd':
+        optimizer = keras.optimizers.SGD(learning_rate=learning_rate)
+    elif optimizer.lower() == 'adamw':
+        optimizer = keras.optimizers.AdamW(learning_rate=learning_rate)
     # ============================================
     
     # Setup a sequential model
@@ -77,7 +83,8 @@ def build_CNN(input_shape, loss,
                          kernel_size=kernel_size, # experiment, change back to (3, 3)
                          padding="same",
                          activation=act_fun,
-                         input_shape=input_shape
+                         input_shape=input_shape,
+                         kernel_regularizer= regularizer
 
         ))
 
