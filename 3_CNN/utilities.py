@@ -34,10 +34,12 @@ def build_CNN(input_shape, loss,
                 optimizer:str='sgd',
                 print_summary:bool=False,
                 BN_order_experiment:bool=False,
-                regularizer = None,
-                regularizer_dense_layers = None,
+                kernel_regularizer = None,
+                bias_regularizer = None,
+                activity_regularizer = None,
                 kernel_size = (3,3),
-                kernel_init_scale = 1):
+                kernel_init_scale = 1,
+                regularizer_dense_layers = None):
     """
     Builds a Convolutional Neural Network (CNN) model based on the provided parameters.
     
@@ -90,7 +92,9 @@ def build_CNN(input_shape, loss,
                          padding="same",
                          activation=act_fun,
                          input_shape=input_shape,
-                         kernel_regularizer= regularizer
+                         kernel_regularizer= kernel_regularizer,
+                         bias_regularizer=bias_regularizer,
+                         activity_regularizer=activity_regularizer
 
         ))
 
