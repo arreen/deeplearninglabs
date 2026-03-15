@@ -4,7 +4,7 @@ import tf_keras as keras
 
 from tf_keras.models import Sequential, Model
 from tf_keras.layers import Input, Dense, BatchNormalization, Dropout, Conv2D, MaxPooling2D, Flatten
-from tf_keras.optimizers import SGD, Adam, AdamW
+from tf_keras.optimizers import SGD, Adam, AdamW, RMSprop
 from tf_keras import regularizers
 
 # Set seed from random number generator, for better comparisons
@@ -22,6 +22,9 @@ import matplotlib.pyplot as plt
 
 # import matplotlib.pyplot as plt
 
+def abs_activation(x):
+    return tf.math.abs(x)
+
 # define funstion that builds a CNN model
 def build_CNN(input_shape, loss, 
                 n_conv_layers:int=2, 
@@ -32,6 +35,7 @@ def build_CNN(input_shape, loss,
                 learning_rate:float=0.01, 
                 act_fun='sigmoid', 
                 optimizer:str='sgd',
+                momentum:float=0,
                 print_summary:bool=False,
                 BN_order_experiment:bool=False,
                 kernel_regularizer = None,
@@ -66,13 +70,15 @@ def build_CNN(input_shape, loss,
 
     # Setup optimizer, depending on input parameter string
     if optimizer.lower() == 'adam':
-        optimizer = keras.optimizers.Adam(learning_rate = learning_rate)
+        optimizer = Adam(learning_rate = learning_rate)
     elif optimizer.lower() == 'sgd':
-        optimizer = keras.optimizers.SGD(learning_rate=learning_rate)
+        optimizer = SGD(learning_rate=learning_rate, momentum=momentum, nesterov=True)
     elif optimizer.lower() == 'adamw':
-        optimizer = keras.optimizers.AdamW(learning_rate=learning_rate)
+        optimizer = AdamW(learning_rate=learning_rate)
+    elif(optimizer.lower() == 'rmsprop'):
+        optimizer = RMSprop(learning_rate=learning_rate)
     # ============================================
-    
+
     # Setup a sequential model
     model = Sequential()
 
