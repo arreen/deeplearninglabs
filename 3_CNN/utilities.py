@@ -82,7 +82,9 @@ def build_CNN(input_shape, loss,
     if optimizer.lower() == 'adam':
         optimizer = Adam(learning_rate = learning_rate)
     elif optimizer.lower() == 'sgd':
-        optimizer = SGD(learning_rate=learning_rate, momentum=momentum, nesterov=True)
+        optimizer = SGD(learning_rate=learning_rate)
+    elif optimizer.lower() == 'sgdm':
+        optimizer = SGD(learning_rate=learning_rate, momentum=0.9, nesterov=True)
     elif optimizer.lower() == 'adamw':
         optimizer = AdamW(learning_rate=learning_rate)
     elif(optimizer.lower() == 'rmsprop'):
@@ -201,7 +203,7 @@ def train_CNN(config, training_config):
                 use_dropout=config["use_dropout"],
                 learning_rate=config["learning_rate"],
                 act_fun=config["act_fun"],
-                kernel_size=(4,4),
+                kernel_size=(3,3),
                 optimizer=config["optimizer"],
                 kernel_init_scale=config["kernel_init_scale"],
                 print_summary=False,
@@ -213,29 +215,36 @@ def train_CNN(config, training_config):
         
     # Train the model (no need to save the history, as the callback will log the results).
     # Remember to add the TuneReporterCallback() to the list of callbacks.
-
-    max_lr = config["max_lr"]
-    warmup_duration = round(epochs*0.2)
-    # cosine annealing, one cycle
-    #https://wiki.cloudfactory.com/docs/mp-wiki/scheduler/cosineannealinglr
-    def scheduler(epoch, lr):
-        if epoch < warmup_duration:
-            return learning_rate + epoch * (max_lr-learning_rate) / warmup_duration
-        else:
-            decay_duration = epochs - warmup_duration
-            epochs_past_warmup = epoch - warmup_duration
-            min_lr = learning_rate * 0.1 
-
-            progress = epochs_past_warmup / decay_duration
-            cosine_multiplier = 0.5 * (1 + math.cos(math.pi * progress))
-            
-            return min_lr + (max_lr - min_lr) * cosine_multiplier    
         
-    callback = LearningRateScheduler(scheduler)
+    if config["use_scheduler"]:
 
+        max_lr = config["max_lr"]
+        warmup_duration = round(epochs*0.2)
+        # cosine annealing, one cycle
+        #https://wiki.cloudfactory.com/docs/mp-wiki/scheduler/cosineannealinglr
+        def scheduler(epoch, lr):
+            if epoch < warmup_duration:
+                return learning_rate + epoch * (max_lr-learning_rate) / warmup_duration
+            else:
+                decay_duration = epochs - warmup_duration
+                epochs_past_warmup = epoch - warmup_duration
+                min_lr = learning_rate * 0.1 
 
-    model.fit(X_train, y_train, validation_data = (X_val, y_val), epochs = epochs, batch_size = batch_size, 
+                progress = epochs_past_warmup / decay_duration
+                cosine_multiplier = 0.5 * (1 + math.cos(math.pi * progress))
+                
+                return min_lr + (max_lr - min_lr) * cosine_multiplier    
+            
+        callback = LearningRateScheduler(scheduler)
+        model.fit(X_train, y_train, validation_data = (X_val, y_val), epochs = epochs, batch_size = batch_size, 
                                 callbacks=[callback, TuneReporterCallback()], verbose=0)
+    
+    else:
+        model.fit(X_train, y_train, validation_data = (X_val, y_val), epochs = epochs, batch_size = batch_size, 
+                                callbacks=[TuneReporterCallback()], verbose=0)
+
+
+    
 
 
 
