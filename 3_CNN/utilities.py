@@ -4,7 +4,7 @@ import tf_keras as keras
 
 from tf_keras.models import Sequential, Model
 from tf_keras.layers import Input, Dense, BatchNormalization, Dropout, Conv2D, MaxPooling2D, Flatten
-from tf_keras.optimizers import SGD, Adam, AdamW
+from tf_keras.optimizers import SGD, Adam, AdamW, RMSprop
 from tf_keras import regularizers
 from tf_keras.losses import CategoricalFocalCrossentropy
 
@@ -32,6 +32,9 @@ import matplotlib.pyplot as plt
 
 # import matplotlib.pyplot as plt
 
+def abs_activation(x):
+    return tf.math.abs(x)
+
 # define funstion that builds a CNN model
 def build_CNN(input_shape, loss, 
                 n_conv_layers:int=2, 
@@ -42,6 +45,7 @@ def build_CNN(input_shape, loss,
                 learning_rate:float=0.01, 
                 act_fun='sigmoid', 
                 optimizer:str='sgd',
+                momentum:float=0,
                 print_summary:bool=False,
                 BN_order_experiment:bool=False,
                 kernel_regularizer = None,
@@ -76,13 +80,17 @@ def build_CNN(input_shape, loss,
 
     # Setup optimizer, depending on input parameter string
     if optimizer.lower() == 'adam':
-        optimizer = keras.optimizers.Adam(learning_rate = learning_rate)
+        optimizer = Adam(learning_rate = learning_rate)
     elif optimizer.lower() == 'sgd':
-        optimizer = keras.optimizers.SGD(learning_rate=learning_rate*1e4) # this is for raytune searchspace
+        optimizer = SGD(learning_rate=learning_rate)
+    elif optimizer.lower() == 'sgdm':
+        optimizer = SGD(learning_rate=learning_rate, momentum=0.9, nesterov=True)
     elif optimizer.lower() == 'adamw':
-        optimizer = keras.optimizers.AdamW(learning_rate=learning_rate)
+        optimizer = AdamW(learning_rate=learning_rate)
+    elif(optimizer.lower() == 'rmsprop'):
+        optimizer = RMSprop(learning_rate=learning_rate)
     # ============================================
-    
+
     # Setup a sequential model
     model = Sequential()
 
@@ -195,7 +203,7 @@ def train_CNN(config, training_config):
                 use_dropout=config["use_dropout"],
                 learning_rate=config["learning_rate"],
                 act_fun=config["act_fun"],
-                kernel_size=(4,4),
+                kernel_size=(3,3),
                 optimizer=config["optimizer"],
                 kernel_init_scale=config["kernel_init_scale"],
                 print_summary=False,
@@ -207,29 +215,36 @@ def train_CNN(config, training_config):
         
     # Train the model (no need to save the history, as the callback will log the results).
     # Remember to add the TuneReporterCallback() to the list of callbacks.
-
-    max_lr = config["max_lr"]
-    warmup_duration = round(epochs*0.2)
-    # cosine annealing, one cycle
-    #https://wiki.cloudfactory.com/docs/mp-wiki/scheduler/cosineannealinglr
-    def scheduler(epoch, lr):
-        if epoch < warmup_duration:
-            return learning_rate + epoch * (max_lr-learning_rate) / warmup_duration
-        else:
-            decay_duration = epochs - warmup_duration
-            epochs_past_warmup = epoch - warmup_duration
-            min_lr = learning_rate * 0.1 
-
-            progress = epochs_past_warmup / decay_duration
-            cosine_multiplier = 0.5 * (1 + math.cos(math.pi * progress))
-            
-            return min_lr + (max_lr - min_lr) * cosine_multiplier    
         
-    callback = LearningRateScheduler(scheduler)
+    if config["use_scheduler"]:
 
+        max_lr = config["max_lr"]
+        warmup_duration = round(epochs*0.2)
+        # cosine annealing, one cycle
+        #https://wiki.cloudfactory.com/docs/mp-wiki/scheduler/cosineannealinglr
+        def scheduler(epoch, lr):
+            if epoch < warmup_duration:
+                return learning_rate + epoch * (max_lr-learning_rate) / warmup_duration
+            else:
+                decay_duration = epochs - warmup_duration
+                epochs_past_warmup = epoch - warmup_duration
+                min_lr = learning_rate * 0.1 
 
-    model.fit(X_train, y_train, validation_data = (X_val, y_val), epochs = epochs, batch_size = batch_size, 
+                progress = epochs_past_warmup / decay_duration
+                cosine_multiplier = 0.5 * (1 + math.cos(math.pi * progress))
+                
+                return min_lr + (max_lr - min_lr) * cosine_multiplier    
+            
+        callback = LearningRateScheduler(scheduler)
+        model.fit(X_train, y_train, validation_data = (X_val, y_val), epochs = epochs, batch_size = batch_size, 
                                 callbacks=[callback, TuneReporterCallback()], verbose=0)
+    
+    else:
+        model.fit(X_train, y_train, validation_data = (X_val, y_val), epochs = epochs, batch_size = batch_size, 
+                                callbacks=[TuneReporterCallback()], verbose=0)
+
+
+    
 
 
 
