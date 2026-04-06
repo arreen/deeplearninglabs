@@ -78,7 +78,7 @@ def build_CNN(input_shape, loss,
     if optimizer.lower() == 'adam':
         optimizer = keras.optimizers.Adam(learning_rate = learning_rate)
     elif optimizer.lower() == 'sgd':
-        optimizer = keras.optimizers.SGD(learning_rate=learning_rate)
+        optimizer = keras.optimizers.SGD(learning_rate=learning_rate*1e4) # this is for raytune searchspace
     elif optimizer.lower() == 'adamw':
         optimizer = keras.optimizers.AdamW(learning_rate=learning_rate)
     # ============================================
