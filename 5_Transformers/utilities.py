@@ -45,17 +45,17 @@ def scaled_dot_product_attention(q, k, v):
     # --------------------------------------------
 
     # Compute the dot product between queries and keys.
-    # Shape: (batch_size, num_heads, seq_len_q, seq_len_k)
+    matmul_qk = ...  # Shape: (batch_size, num_heads, seq_len_q, seq_len_k)
 
-    matmul_qk = tf.linalg.matmul(q, k, transpose_b=True)
     # Scale the dot products by the square root of the depth.
-    d = tf.cast(tf.shape(q)[-1], q.dtype)
-    dk = matmul_qk / tf.math.sqrt(d)
+    dk = ...
+    scaled_attention_logits = ...
 
     # Apply the softmax function to obtain the attention weights (use tf.nn.softmax).
-    attention_weights = tf.nn.softmax(dk, axis = -1)  # Shape: (batch_size, num_heads, seq_len_q, seq_len_k)
+    attention_weights = ...  # Shape: (batch_size, num_heads, seq_len_q, seq_len_k)
+
     # Compute the weighted sum of the values.
-    output = tf.linalg.matmul(attention_weights, v)  # Shape: (batch_size, num_heads, seq_len_q, depth)
+    output = ...  # Shape: (batch_size, num_heads, seq_len_q, depth)
 
     # ============================================
 
@@ -87,10 +87,10 @@ class MultiHeadAttention(layers.Layer):
 
         # Initialize the weights for the projection layers. Note that here we are combining all the heads together.
         # Remember to set the trainable parameter to True
-        self.WQ = tf.Variable(initializer(shape = (n_heads, dk, proj_size)))  # of shape (n_heads, proj_size, dq=dk)
-        self.WK = tf.Variable(initializer(shape = (n_heads, dk, proj_size)))  # of shape (n_heads, proj_size, dk=dq)
-        self.WV = tf.Variable(initializer(shape = (n_heads, dv, proj_size)))  # of shape (n_heads, proj_size, dv)
-        self.WO = tf.Variable(initializer(shape = (n_heads*proj_size, proj_size)))  # of shape (n_heads*proj_size, proj_size)
+        self.WQ = tf.Variable(...)  # of shape (n_heads, proj_size, dq=dk)
+        self.WK = tf.Variable(...)  # of shape (n_heads, proj_size, dk=dq)
+        self.WV = tf.Variable(...)  # of shape (n_heads, proj_size, dv)
+        self.WO = tf.Variable(...)  # of shape (n_heads*proj_size, proj_size)
 
         # ============================================
 
@@ -125,41 +125,34 @@ class MultiHeadAttention(layers.Layer):
         # Projecting Q,K,V to Qh, Kh, Vh. The H projection are stacked on the along the second-to-last axis.
         # NOTE : here one needs to use tf.experimental.numpy.dot instead of tf.matmul as the former supports broadcasting.
 
-
-        print()
         Qh = tf.experimental.numpy.dot(
-            Q, self.WQ
+            ...
         )  # of shape (batch_size, number_of_Q, n_heads, dk=dq)
         Kh = tf.experimental.numpy.dot(
-            K, self.WK
+            ...
         )  # of shape (batch_size, number_of_K, n_heads, dk=dq)
         Vh = tf.experimental.numpy.dot(
-            V, self.WV
+            ...
         )  # of shape (batch_size, number_of_V, n_heads, dv)
 
-
         # Bring the number of queries, keys, and their dimension to the last two axes so that we can use the scaled_dot_product_attention function
-        Qh = tf.transpose(Qh, perm=[0, 2, 1, 3])  # of shape (batch_size, H, number_of_Q, proj_size)
-        Kh = tf.transpose(Kh, perm=[0, 2, 1, 3])  # of shape (batch_size, H, number_of_K, proj_size)
-        Vh = tf.transpose(Vh, perm=[0, 2, 1, 3])  # of shape (batch_size, H, number_of_V, proj_size)
+        Qh = tf.transpose(...)  # of shape (batch_size, H, number_of_Q, proj_size)
+        Kh = tf.transpose(...)  # of shape (batch_size, H, number_of_K, proj_size)
+        Vh = tf.transpose(...)  # of shape (batch_size, H, number_of_V, proj_size)
 
         # Computing the dot-product attention
         attention_pooling_h, attention_weights_h = scaled_dot_product_attention(
-            Qh, Kh, Vh
+            ...
         )  # of shape (batch_size, n_heads, number_of_Q, proj_size)
 
         # Flattening (concatenate) across the number of heads.
-        transposed_weights = tf.transpose(attention_pooling_h, perm=[0, 2, 1, 3])
-        batch_size = tf.shape(transposed_weights)[0]
-        number_of_Q = tf.shape(transposed_weights)[1]
-        n_heads = tf.shape(transposed_weights)[2]
-        proj_dim = tf.shape(transposed_weights)[3]
-        A = tf.reshape(transposed_weights, (batch_size, number_of_Q, n_heads*proj_dim))  # of shape (batch_size, number_of_Q, n_heads*proj_dim)
-        #A = tf.cast(A, self.WO.dtype)
+        A = tf.reshape(...)  # of shape (batch_size, number_of_Q, n_heads*proj_dim)
+
         # Projecting the concatenated heads to the output space
         A = tf.experimental.numpy.dot(
-            A, self.WO
+            ...
         )  # of shape (batch_size, number_of_Q, proj_dim)
+
         # ============================================
 
         if self.return_attention_weights:
